@@ -1,0 +1,366 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sarfraj Vocab Hub</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#94a3b8;--accent:#06b6d4;--glass: rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#071024 0%, #071827 100%);color:#e6eef6}
+    header{display:flex;align-items:center;gap:16px;padding:18px 24px;border-bottom:1px solid rgba(255,255,255,0.03);position:sticky;top:0;background:linear-gradient(180deg,rgba(11,17,26,0.7),rgba(11,17,26,0.6));backdrop-filter: blur(6px);z-index:10}
+    .logo{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#04263a;box-shadow: 0 6px 18px rgba(6,182,212,0.12)}
+    h1{font-size:18px;margin:0}
+    .subtitle{color:var(--muted);font-size:12px}
+    .controls{margin-left:auto;display:flex;gap:12px;align-items:center}
+    input[type=search]{padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit;min-width:260px}
+    .btn{padding:8px 12px;border-radius:10px;border:0;background:var(--accent);color:#04263a;font-weight:600;cursor:pointer}
+    .container{display:grid;grid-template-columns:360px 1fr;height:calc(100vh - 86px)}
+    aside{padding:18px;border-right:1px solid rgba(255,255,255,0.02);overflow:auto}
+    .filters{display:flex;flex-direction:column;gap:10px}
+    main{padding:18px;overflow:hidden}
+    .list-wrap{height:100%;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
+    .list{height:100%;overflow:auto;position:relative}
+    .item{display:flex;gap:14px;align-items:flex-start;padding:14px;border-bottom:1px solid rgba(255,255,255,0.02);height:96px}
+    .word{font-weight:700;font-size:18px}
+    .meta{color:var(--muted);font-size:13px;margin-top:6px}
+    .actions{margin-left:auto;display:flex;flex-direction:column;gap:8px}
+    .small{padding:6px 10px;border-radius:8px;border:0;background:rgba(255,255,255,0.03);color:inherit;cursor:pointer}
+    .example{margin-top:6px;font-size:14px}
+    footer{padding:12px 18px;color:var(--muted);font-size:13px;text-align:center}
+    .highlight{background:linear-gradient(90deg,#fef08a33,#86efac33);padding:0 4px;border-radius:4px}
+    /* virtual spacer */
+    .spacer{height:0px}
+    .info{font-size:13px;color:var(--muted);margin-top:10px}
+    /* responsive */
+    @media (max-width:900px){.container{grid-template-columns:1fr}aside{display:none}input[type=search]{min-width:140px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo" title="Sarfraj Vocab Hub">SV</div>
+    <div>
+      <h1>Sarfraj Vocab Hub</h1>
+      <div class="subtitle">10,000+ words • Hindi meanings • Pronunciation (voice) • Examples</div>
+    </div><div class="controls">
+  <input id="search" type="search" placeholder="Search any word... (e.g. pragmatic)" autocomplete="off" />
+  <button id="clear" class="btn" title="Clear search">Clear</button>
+</div>
+
+  </header>  <div class="container">
+    <aside>
+      <div class="filters">
+        <label>Voice speed: <span id="rateVal">1</span></label>
+        <input id="rate" type="range" min="0.6" max="1.6" step="0.1" value="1" /><label>Choose voice (browser voices will appear here)</label>
+    <select id="voiceList"></select>
+
+    <div class="info">Tip: Search a word and press <strong>Play</strong> to hear pronunciation. Use the scroll panel to browse thousands of words smoothly.</div>
+
+    <div style="margin-top:14px">
+      <label style="font-weight:700">Dataset status</label>
+      <div id="dsStatus" class="info">Loading sample dataset...</div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button id="loadSample" class="small">Load small sample</button>
+      <button id="loadFromFile" class="small">Load words.json</button>
+      <a id="downloadTemplate" class="small" href="#" download="words-template.json">Download template</a>
+    </div>
+  </div>
+</aside>
+
+<main>
+  <div class="list-wrap">
+    <div id="list" class="list" tabindex="0" aria-label="Words list">
+      <!-- Virtual list will render items here -->
+    </div>
+  </div>
+</main>
+
+  </div>  <footer>Made for <strong>Sarfraj</strong> — Vocab practice with speech synthesis. Works offline after loading dataset.</footer>  <script>
+    // ---- Configuration ----
+    const ITEM_HEIGHT = 96; // px (must match CSS .item height)
+    const BUFFER = 8; // items before/after viewport
+
+    // ---- Sample small dataset (used if user doesn't load a file) ----
+    const SAMPLE = [
+      {word:'pragmatic',meaning_hi:'व्यावहारिक, व्यावहारिक समाधान',example_en:'She took a pragmatic approach to solve the problem.',example_hi:'उसने समस्या हल करने के लिए व्यावहारिक तरीका अपनाया।'},
+      {word:'elated',meaning_hi:'प्रसन्न, उत्साहित',example_en:'He was elated after receiving the award.',example_hi:'इनाम पाकर वह बहुत प्रसन्न था।'},
+      {word:'meticulous',meaning_hi:'सूक्ष्म, बहुत ध्यान देने वाला',example_en:'The artist is meticulous about details.',example_hi:'कला का कार्य विवरणों के प्रति बहुत ध्यान देता है।'},
+      {word:'abundant',meaning_hi:'प्रचुर, बहुतायत',example_en:'The region has abundant natural resources.',example_hi:'उस क्षेत्र में प्राकृतिक संसाधन प्रचुर मात्रा में हैं।'},
+      {word:'novice',meaning_hi:'शुरुआती, नवप्रवेशी',example_en:'He is a novice at programming.',example_hi:'वह प्रोग्रामिंग में एक नौसिखिया है।'}
+    ];
+
+    // ---- State ----
+    let words = []; // will hold the full dataset
+    let filtered = []; // filtered indices
+    let container, spacerTop, spacerBottom;
+
+    // ---- Speech setup ----
+    const synth = window.speechSynthesis;
+    let voices = [];
+
+    function populateVoiceList(){
+      voices = synth.getVoices().filter(v=>v.lang && v.name);
+      const sel = document.getElementById('voiceList');
+      sel.innerHTML = '';
+      voices.forEach((v,i)=>{
+        const opt = document.createElement('option');
+        opt.value = i; opt.textContent = `${v.name} — ${v.lang}`;
+        sel.appendChild(opt);
+      });
+    }
+    synth.onvoiceschanged = populateVoiceList;
+
+    // ---- Virtual list rendering ----
+    function createItemElement(idx){
+      const w = words[idx];
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.style.height = ITEM_HEIGHT + 'px';
+
+      const left = document.createElement('div');
+      left.style.minWidth = '220px';
+      const title = document.createElement('div');
+      title.className='word';
+      title.innerHTML = escapeHtml(w.word);
+      left.appendChild(title);
+
+      const meaning = document.createElement('div');
+      meaning.className = 'meta';
+      meaning.innerHTML = `<strong>Meaning (HI):</strong> ${escapeHtml(w.meaning_hi)}`;
+      left.appendChild(meaning);
+
+      const example = document.createElement('div');
+      example.className='example';
+      example.innerHTML = `<div><strong>Example (EN):</strong> ${escapeHtml(w.example_en)}</div><div style="margin-top:6px"><strong>Example (HI):</strong> ${escapeHtml(w.example_hi)}</div>`;
+      left.appendChild(example);
+
+      const actions = document.createElement('div');
+      actions.className='actions';
+
+      const playBtn = document.createElement('button');
+      playBtn.className='small'; playBtn.textContent='Play';
+      playBtn.onclick = ()=>playWord(w.word);
+      actions.appendChild(playBtn);
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className='small'; copyBtn.textContent='Copy';
+      copyBtn.onclick = ()=>{
+        navigator.clipboard?.writeText(w.word).then(()=>alert('Copied: '+w.word)).catch(()=>{});
+      }
+      actions.appendChild(copyBtn);
+
+      el.appendChild(left);
+      el.appendChild(actions);
+
+      return el;
+    }
+
+    function render(){
+      const list = container;
+      const scrollTop = list.scrollTop;
+      const height = list.clientHeight;
+      const total = filtered.length;
+      const totalHeight = total * ITEM_HEIGHT;
+      // top & bottom spacers
+      if(!spacerTop){
+        spacerTop = document.createElement('div'); spacerTop.className='spacer';
+        spacerBottom = document.createElement('div'); spacerBottom.className='spacer';
+        list.appendChild(spacerTop);
+        list.appendChild(spacerBottom);
+      }
+      const startIdx = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER);
+      const endIdx = Math.min(total-1, Math.floor((scrollTop + height) / ITEM_HEIGHT) + BUFFER);
+
+      const topHeight = startIdx * ITEM_HEIGHT;
+      const bottomHeight = (total - endIdx - 1) * ITEM_HEIGHT;
+      spacerTop.style.height = topHeight + 'px';
+      spacerBottom.style.height = bottomHeight + 'px';
+
+      // remove existing item nodes between spacers
+      // keep only the generated nodes between spacerTop and spacerBottom
+      // clear middle
+      const toRemove = [];
+      for(const child of Array.from(list.children)){
+        if(child === spacerTop || child === spacerBottom) continue;
+        toRemove.push(child);
+      }
+      toRemove.forEach(n=>n.remove());
+
+      // add visible nodes
+      for(let i=startIdx;i<=endIdx;i++){
+        const actualIdx = filtered[i];
+        const node = createItemElement(actualIdx);
+        list.insertBefore(node, spacerBottom);
+      }
+    }
+
+    function escapeHtml(s){
+      return (s+'').replace(/[&<>"]+/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]});
+    }
+
+    // ---- Search ----
+    let searchTimer = null;
+    function doSearch(text){
+      const q = text.trim().toLowerCase();
+      if(!q){
+        // show all
+        filtered = words.map((_,i)=>i);
+        document.getElementById('dsStatus').textContent = `${words.length} words loaded`;
+        render();
+        return;
+      }
+      const results = [];
+      for(let i=0;i<words.length;i++){
+        const w = words[i];
+        if(w.word.toLowerCase().includes(q) || (w.meaning_hi||'').toLowerCase().includes(q) || (w.example_en||'').toLowerCase().includes(q)){
+          results.push(i);
+        }
+      }
+      filtered = results;
+      document.getElementById('dsStatus').textContent = `Found ${filtered.length} results for "${text}"`;
+      render();
+      // scroll to first
+      const listEl = container;
+      listEl.scrollTop = 0;
+    }
+
+    function debounceSearch(v){
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(()=>doSearch(v), 220);
+    }
+
+    // ---- Play word (speech synthesis) ----
+    function playWord(word){
+      if(!window.speechSynthesis){alert('Speech synthesis not supported in this browser.');return}
+      const rate = parseFloat(document.getElementById('rate').value || 1);
+      const sel = document.getElementById('voiceList');
+      const voice = voices[sel.value] || null;
+      const msg = new SpeechSynthesisUtterance(word);
+      msg.rate = rate;
+      if(voice) msg.voice = voice;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(msg);
+    }
+
+    // ---- Load dataset helpers ----
+    async function loadSample(){
+      words = SAMPLE.concat();
+      // simulate many items for performance test: DO NOT add 10k in sample for user convenience
+      // but code supports large arrays - you can replace words.json with a 10k+ file.
+      filtered = words.map((_,i)=>i);
+      document.getElementById('dsStatus').textContent = `Sample loaded (${words.length} words). Replace with words.json for full dataset.`;
+      render();
+    }
+
+    async function loadFromFile(){
+      // open file picker
+      const [file] = await window.showOpenFilePicker ? await window.showOpenFilePicker({types:[{description:'JSON',accept:{'application/json': ['.json']}}]}) : [];
+      if(file){
+        const fh = await file.getFile();
+        const txt = await fh.text();
+        try{
+          const data = JSON.parse(txt);
+          if(!Array.isArray(data)) throw new Error('Expected array');
+          words = data;
+          filtered = words.map((_,i)=>i);
+          document.getElementById('dsStatus').textContent = `Loaded ${words.length} words from file.`;
+          render();
+        }catch(e){
+          alert('Invalid JSON file. Make sure it is an array of word objects.');
+        }
+      } else {
+        // fallback: input element
+        const inp = document.createElement('input'); inp.type='file'; inp.accept='.json';
+        inp.onchange = async (ev)=>{
+          const f = ev.target.files[0];
+          if(!f) return;
+          const txt = await f.text();
+          try{
+            const data = JSON.parse(txt);
+            if(!Array.isArray(data)) throw new Error('Expected array');
+            words = data;
+            filtered = words.map((_,i)=>i);
+            document.getElementById('dsStatus').textContent = `Loaded ${words.length} words from file.`;
+            render();
+          }catch(e){alert('Invalid JSON file.');}
+        };
+        inp.click();
+      }
+    }
+
+    // ---- Download template ----
+    function downloadTemplate(){
+      const tpl = [
+        {word:'example',meaning_hi:'उदाहरण',example_en:'This is an example sentence.',example_hi:'यह एक उदाहरण वाक्य है।'},
+        {word:'abate',meaning_hi:'कम होना',example_en:'The storm began to abate.',example_hi:'तूफान कम होने लगा।'}
+      ];
+      const blob = new Blob([JSON.stringify(tpl,null,2)],{type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.getElementById('downloadTemplate');
+      a.href = url;
+    }
+
+    // ---- Initialization ----
+    window.addEventListener('load', ()=>{
+      container = document.getElementById('list');
+
+      document.getElementById('loadSample').addEventListener('click', loadSample);
+      document.getElementById('loadFromFile').addEventListener('click', loadFromFile);
+      document.getElementById('downloadTemplate').addEventListener('click', downloadTemplate);
+
+      const searchInput = document.getElementById('search');
+      searchInput.addEventListener('input', (e)=>debounceSearch(e.target.value));
+      document.getElementById('clear').addEventListener('click', ()=>{searchInput.value='';doSearch('');});
+
+      document.getElementById('rate').addEventListener('input',(e)=>{document.getElementById('rateVal').textContent = e.target.value});
+
+      // keyboard: enter on search -> focus first visible item and play
+      searchInput.addEventListener('keydown',(e)=>{
+        if(e.key === 'Enter'){
+          if(filtered.length>0){
+            const idx = filtered[0];
+            playWord(words[idx].word);
+          }
+        }
+      });
+
+      // on scroll render
+      container.addEventListener('scroll', ()=>{
+        requestAnimationFrame(render);
+      });
+
+      // populate voice list (try immediately)
+      populateVoiceList();
+
+      // load sample by default
+      loadSample();
+
+      // make download template ready
+      downloadTemplate();
+
+      // accessibility: focus container
+      container.focus();
+    });
+
+    // For safety: if large dataset is available at /words.json, auto-load it
+    (async function tryAutoLoad(){
+      try{
+        const resp = await fetch('./words.json');
+        if(resp.ok){
+          const data = await resp.json();
+          if(Array.isArray(data) && data.length>100){
+            words = data;
+            filtered = words.map((_,i)=>i);
+            document.getElementById('dsStatus').textContent = `Auto-loaded ${words.length} words from words.json`;
+            // render after load
+            requestAnimationFrame(render);
+            return;
+          }
+        }
+      }catch(e){}
+    })();
+  </script></body>
+</html>
